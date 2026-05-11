@@ -1,0 +1,327 @@
+name: Build Independent Module
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Module version (e.g., 1.0.0)'
+        required: true
+        type: string
+      module:
+        description: 'Module name (e.g., cyclomedia_integration)'
+        required: true
+        type: string
+      module_prefix:
+        description: 'Module prefix for tags and image paths (e.g., cyclomedia)'
+        required: true
+        type: string
+      is_release:
+        description: 'Whether this is a release (true) or pre-release (false)'
+        required: true
+        type: string
+      engineering_prefix:
+        description: 'Engineering prefix for ACR & Harbor image paths'
+        type: string
+        default: devops_sandbox_engineering
+      releases_prefix:
+        description: 'Releases prefix for ACR & Harbor image paths'
+        type: string
+        default: devops_sandbox_releases
+      custom_cut_script:
+        description: 'Path to custom cut script (relative to module repo root). If empty, uses generic script.'
+        type: string
+        default: ''
+      build_qa_images:
+        description: 'Whether to build QA appserver images'
+        type: boolean
+        default: false
+      platform_version:
+        description: 'Platform version to build against'
+        type: string
+        default: '7.4'
+      namespace:
+        description: 'Kubernetes namespace for the deployment'
+        type: string
+        default: ''
+      pod_name:
+        description: 'Kubernetes pod name to redeploy after images are built'
+        type: string
+        default: ''
+      shortened_version:
+        description: 'Shortened version for language packs repo'
+        type: string
+        required: false
+      tags:
+        description: 'Comma-separated list of all Docker tags to apply'
+        type: string
+        required: false
+      build_id:
+        description: 'Unique build identifier'
+        type: string
+        required: false
+        
+    secrets:
+      GH_TOKEN:
+        required: true   
+      HARBOR_USERNAME:
+        required: true
+      HARBOR_CLI_SECRET:
+        required: true
+      REGISTRY_USERNAME:
+        required: true
+      REGISTRY_PASSWORD:
+        required: true
+      AZURE_STORAGE_ACCOUNT_KEY:
+        required: true
+      AZURE_CREDENTIALS:
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+  packages: write
+
+env:
+  ACR_REGISTRY: "iqgeoproddev.azurecr.io"
+  HARBOR_REGISTRY: "harbor.delivery.iqgeo.cloud"
+
+jobs:
+  cut-module:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout caller repo (module source)
+        uses: actions/checkout@v4
+        with:
+          path: module-repo
+      
+      - name: Checkout reusable workflow repo (for scripts and dockerfiles)
+        uses: actions/checkout@v4
+        with:
+          repository: IQGeo/devops-engineering-ci-public-build-independent-module-workflow
+          path: workflow-repo
+          token: ${{ secrets.GH_TOKEN }}
+      
+      - name: Checkout core platform repo
+        uses: actions/checkout@v4
+        with:
+          repository: IQGeo/myworld-product-core
+          path: myworld-product-core
+          token: ${{ secrets.GH_TOKEN }}
+      
+      - name: Set up environment
+        run: |
+          echo "CORE_REPO=$GITHUB_WORKSPACE/myworld-product-core" >> $GITHUB_ENV
+          echo "MODULES_DIR=$GITHUB_WORKSPACE/myworld-product-core/WebApps/myworldapp/modules" >> $GITHUB_ENV
+          echo "MODULE_REPO=$GITHUB_WORKSPACE/module-repo" >> $GITHUB_ENV
+          echo "WORKFLOW_REPO=$GITHUB_WORKSPACE/workflow-repo" >> $GITHUB_ENV
+      
+      - name: Display environment
+        run: |
+          echo "Building ${{ inputs.module }} version ${{ inputs.version }}"
+          echo "Module prefix: ${{ inputs.module_prefix }}"
+          echo "Is release: ${{ inputs.is_release }}"
+          echo "Platform version: ${{ inputs.platform_version }}"
+          echo "Core repo: $CORE_REPO"
+          echo "Modules dir: $MODULES_DIR"
+          echo "Module repo: $MODULE_REPO"
+          echo "Workflow repo: $WORKFLOW_REPO"
+      
+      - name: Prepare modules directory
+        run: |
+          # Remove .git from core (we want code, not git repo)
+          rm -rf $CORE_REPO/.git
+          
+          # Copy module source to platform modules directory
+          cp -r $MODULE_REPO/${{ inputs.module }} $MODULES_DIR/
+          
+          # Preserve git info if available (for version tracking)
+          if [ -d "$MODULE_REPO/.git" ]; then
+            echo "Copying git metadata for version tracking"
+            cp -r $MODULE_REPO/.git $MODULES_DIR/${{ inputs.module }}/
+          fi
+          
+          ls -la $MODULES_DIR/${{ inputs.module }}
+      
+      - name: Determine cut script to use
+        id: cut_script
+        run: |
+          CUSTOM_SCRIPT="${{ inputs.custom_cut_script }}"
+          
+          if [[ -n "$CUSTOM_SCRIPT" && -f "$MODULE_REPO/$CUSTOM_SCRIPT" ]]; then
+            echo "✅ Using custom cut script: $CUSTOM_SCRIPT"
+            echo "script=$MODULE_REPO/$CUSTOM_SCRIPT" >> $GITHUB_OUTPUT
+            echo "type=custom" >> $GITHUB_OUTPUT
+          else
+            if [[ -n "$CUSTOM_SCRIPT" ]]; then
+              echo "⚠️  Custom cut script not found: $CUSTOM_SCRIPT"
+              echo "⚠️  Falling back to generic cut script"
+            else
+              echo "✅ Using generic cut script"
+            fi
+            echo "script=$WORKFLOW_REPO/scripts/cut_module_generic.sh" >> $GITHUB_OUTPUT
+            echo "type=generic" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Create output directory
+        run: mkdir -p temp
+      
+      - name: Install pip requirements
+        run: |
+          echo "Installing Python dependencies"
+          sudo apt-get update && sudo apt install -y libfreetype-dev
+          pip install -r $CORE_REPO/WebApps/myworldapp/modules/dev_tools/requirements.txt --user
+      
+      - name: Run cut script
+        run: |
+          echo "Running cut script: ${{ steps.cut_script.outputs.script }}"
+          chmod +x ${{ steps.cut_script.outputs.script }}
+          
+          ${{ steps.cut_script.outputs.script }} \
+            "${{ inputs.module }}" \
+            "${{ inputs.version }}" \
+            "$MODULES_DIR" \
+            "$GITHUB_WORKSPACE/temp"
+        env:
+          OUTPUT_DIR: "${{ github.workspace }}/temp"
+      
+      - name: Verify cut artifacts
+        run: |
+          echo "Verifying cut artifacts:"
+          ls -lh $GITHUB_WORKSPACE/temp/
+          
+          TARBALL="$GITHUB_WORKSPACE/temp/IQGeo_${{ inputs.module }}_${{ inputs.version }}.tar.gz"
+          VERSION_FILE="$GITHUB_WORKSPACE/temp/version_info.json"
+          
+          if [[ ! -f "$TARBALL" ]]; then
+            echo "❌ ERROR: Tarball not found: $TARBALL"
+            exit 1
+          fi
+          
+          if [[ ! -f "$VERSION_FILE" ]]; then
+            echo "❌ ERROR: version_info.json not found: $VERSION_FILE"
+            exit 1
+          fi
+          
+          echo "✅ Tarball size: $(du -h $TARBALL | cut -f1)"
+          echo "✅ version_info.json content:"
+          cat $VERSION_FILE
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Store artifacts in Azure File Share
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            echo "Uploading artifacts to Azure File Share"
+            az storage file upload-batch \
+              -d cut-binaries \
+              -s ${{ github.workspace }}/temp \
+              --destination-path ${{ inputs.module }} \
+              --account-name iqgeoplatformstorage \
+              --account-key ${{ secrets.AZURE_STORAGE_ACCOUNT_KEY }}
+            echo "✅ Artifacts uploaded to: cut-binaries/${{ inputs.module }}"
+          azcliversion: latest
+      
+      - name: Archive binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: ${{ github.workspace }}/temp
+          retention-days: 1
+
+  build-injector:
+    needs: cut-module
+    uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
+    with:
+      version: ${{ inputs.version }}
+      module: ${{ inputs.module }}
+      dockerfile_path: "dockerfiles/Dockerfile.injector"
+      docker_context: "."
+      acr: "iqgeoproddev.azurecr.io"
+      harbor: "harbor.delivery.iqgeo.cloud"
+      engineering_prefix: ${{ inputs.engineering_prefix }}/${{ inputs.module_prefix }}
+      releases_prefix: ${{ inputs.releases_prefix }}
+      is_release: ${{ inputs.is_release }}
+      updated_tags: ${{ inputs.tags || inputs.version }}
+      build_id: ${{ inputs.build_id || github.run_id }}
+      shortened_version: ${{ inputs.shortened_version || inputs.version }}
+      download_binaries: true
+    secrets: inherit
+  
+  build-platform-build:
+    if: ${{ inputs.build_qa_images == true }}
+    needs: build-injector
+    uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
+    with:
+      version: ${{ inputs.version }}
+      module: platform-${{ inputs.module_prefix }}-build
+      dockerfile_path: "deployment/${{ inputs.module_prefix }}/dockerfile.build"
+      docker_context: "."
+      acr: "iqgeoproddev.azurecr.io"
+      harbor: "harbor.delivery.iqgeo.cloud"
+      engineering_prefix: ${{ inputs.engineering_prefix }}
+      releases_prefix: ${{ inputs.releases_prefix }}
+      is_release: ${{ inputs.is_release }}
+      updated_tags: ${{ inputs.tags || inputs.version }}
+      build_id: ${{ inputs.build_id || github.run_id }}
+      download_binaries: false
+    secrets: inherit
+
+  build-platform-components:
+    if: ${{ inputs.build_qa_images == true }}
+    needs: build-platform-build
+    strategy:
+      matrix:
+        include:
+          - module: platform-${{ inputs.module_prefix }}-appserver
+            dockerfile_path: deployment/${{ inputs.module_prefix }}/dockerfile.appserver
+          - module: platform-${{ inputs.module_prefix }}-tools
+            dockerfile_path: deployment/${{ inputs.module_prefix }}/dockerfile.tools
+    uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
+    with:
+      version: ${{ inputs.version }}
+      module: ${{ matrix.module }}
+      dockerfile_path: ${{ matrix.dockerfile_path }}
+      docker_context: "./deployment/${{ inputs.module_prefix }}"
+      acr: "iqgeoproddev.azurecr.io"
+      harbor: "harbor.delivery.iqgeo.cloud"
+      engineering_prefix: ${{ inputs.engineering_prefix }}
+      releases_prefix: ${{ inputs.releases_prefix }}
+      is_release: ${{ inputs.is_release }}
+      updated_tags: ${{ inputs.tags || inputs.version }}
+      build_id: ${{ inputs.build_id || github.run_id }}
+      download_binaries: false
+    secrets: inherit
+  
+  build-qa-appserver:
+    if: ${{ inputs.build_qa_images == true }}
+    needs: build-platform-components
+    uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
+    with:
+      version: ${{ inputs.version }}
+      module: platform-${{ inputs.module_prefix }}-qa-appserver
+      dockerfile_path: "dockerfiles/Dockerfile.QAappserver"
+      docker_context: "."
+      acr: "iqgeoproddev.azurecr.io"
+      harbor: "harbor.delivery.iqgeo.cloud"
+      engineering_prefix: ${{ inputs.engineering_prefix }}
+      releases_prefix: ${{ inputs.releases_prefix }}
+      is_release: ${{ inputs.is_release }}
+      updated_tags: ${{ inputs.tags || inputs.version }}
+      build_id: ${{ inputs.build_id || github.run_id }}
+      download_binaries: false
+    secrets: inherit
+
+  # TEMPORARILY DISABLED FOR TESTING
+  # redeploy-eks-pod:
+  #   if: ${{ inputs.namespace != '' && inputs.pod_name != '' && inputs.build_qa_images == true }}
+  #   needs: build-platform-components
+  #   uses: IQGeo/devops-engineering-ci-redeploy-eks-pod/.github/workflows/redeploy-eks-pod.yml@main
+  #   with:
+  #     pod_name: ${{ inputs.pod_name }}
+  #     namespace: ${{ inputs.namespace }}
+  #   secrets: inherit

@@ -1,0 +1,36 @@
+ARG VERSION=
+ARG PLATFORM_VERSION=7.4
+ARG MODULE_PREFIX=
+ARG ENGINEERING_PREFIX=
+
+# Pull the module's build image
+FROM iqgeoproddev.azurecr.io/${ENGINEERING_PREFIX}/${MODULE_PREFIX}-build:${VERSION} AS builder
+
+# Remove unneeded files for runtime
+RUN rm -rf ${MODULES}/*/node_modules \
+    && rm -rf ${MODULES}/*/package*.json \
+    && rm -rf ${MODULES}/*/native
+
+# Create QA appserver image from platform base
+FROM iqgeoproddev.azurecr.io/engineering/platform/platform-appserver:${PLATFORM_VERSION}
+
+USER root
+
+# Copy pip packages including modules' pip dependencies
+COPY --chown=www-data:www-data --from=builder \
+    /opt/iqgeo/platform/Externals/lib/python3.10/site-packages \
+    /opt/iqgeo/platform/Externals/lib/python3.10/site-packages
+
+# Copy modules
+COPY --chown=www-data:www-data --from=builder ${MODULES} ${MODULES}/
+
+# Copy generated client bundles
+COPY --chown=www-data:www-data --from=builder \
+    ${WEBAPPS}/myworldapp/public ${WEBAPPS}/myworldapp/public/
+COPY --chown=www-data:www-data --from=builder \
+    ${WEBAPPS}/myworldapp/dist ${WEBAPPS}/myworldapp/dist/
+
+# Set modules environment variable
+ENV IQG_MODULES_DIR="${MODULES}"
+
+USER www-data
