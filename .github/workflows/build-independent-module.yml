@@ -169,7 +169,7 @@ jobs:
       - name: Install pip requirements
         run: |
           echo "Installing Python dependencies"
-          sudo apt-get update && sudo apt install -y libfreetype-dev
+          sudo apt-get update && sudo apt install -y libfreetype-dev libcairo2-dev
           pip install -r $CORE_REPO/WebApps/myworldapp/modules/dev_tools/requirements.txt --user
       
       - name: Run cut script
