@@ -264,7 +264,7 @@ jobs:
     with:
       version: ${{ inputs.version }}
       module: ${{ inputs.module }}
-      dockerfile_path: "dockerfiles/Dockerfile.injector"
+      dockerfile_path: "Dockerfile.injector"
       docker_context: "."
       acr: "iqgeoproddev.azurecr.io"
       harbor: "harbor.delivery.iqgeo.cloud"
