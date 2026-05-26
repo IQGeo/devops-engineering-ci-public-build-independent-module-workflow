@@ -226,12 +226,37 @@ jobs:
             echo "✅ Artifacts uploaded to: cut-binaries/${{ inputs.module }}"
           azcliversion: latest
       
+      - name: Copy dockerfiles for build
+        run: |
+          echo "Copying dockerfiles from workflow repo to build context"
+          cp -r $WORKFLOW_REPO/dockerfiles ${{ github.workspace }}/temp/
+          ls -la ${{ github.workspace }}/temp/dockerfiles/
+      
       - name: Archive binaries
         uses: actions/upload-artifact@v4
         with:
           name: binaries
           path: ${{ github.workspace }}/temp
           retention-days: 1
+
+  prepare-dockerfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout central Dockerfiles repo
+        uses: actions/checkout@v4
+        with:
+          repository: IQGeo/devops-engineering-ci-buildfiles
+          path: central
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Copy module Dockerfile.injector into expected location
+        run: |
+          cp central/injectors/modules/Dockerfile.injector Dockerfile.injector
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: injector-dockerfile
+          path: Dockerfile.injector
 
   build-injector:
     needs: cut-module
