@@ -164,7 +164,7 @@ jobs:
           fi
       
       - name: Create output directory
-        run: mkdir -p temp
+        run: mkdir -p temp/${{ inputs.version }}
       
       - name: Install pip requirements
         run: |
@@ -181,17 +181,17 @@ jobs:
             "${{ inputs.module }}" \
             "${{ inputs.version }}" \
             "$MODULES_DIR" \
-            "$GITHUB_WORKSPACE/temp"
+            "$GITHUB_WORKSPACE/temp/${{ inputs.version }}"
         env:
-          OUTPUT_DIR: "${{ github.workspace }}/temp"
+          OUTPUT_DIR: "${{ github.workspace }}/temp/${{ inputs.version }}"
       
       - name: Verify cut artifacts
         run: |
           echo "Verifying cut artifacts:"
-          ls -lh $GITHUB_WORKSPACE/temp/
+          ls -lh $GITHUB_WORKSPACE/temp/${{ inputs.version }}/
           
-          TARBALL="$GITHUB_WORKSPACE/temp/IQGeo_${{ inputs.module }}_${{ inputs.version }}.tar.gz"
-          VERSION_FILE="$GITHUB_WORKSPACE/temp/version_info.json"
+          TARBALL="$GITHUB_WORKSPACE/temp/${{ inputs.version }}/IQGeo_${{ inputs.module }}_${{ inputs.version }}.tar.gz"
+          VERSION_FILE="$GITHUB_WORKSPACE/temp/${{ inputs.version }}/version_info.json"
           
           if [[ ! -f "$TARBALL" ]]; then
             echo "❌ ERROR: Tarball not found: $TARBALL"
