@@ -54,6 +54,17 @@ echo ""
 echo "Module contents:"
 ls -lah
 
+# Generate version_info.json
+echo ""
+echo "Generating version_info.json..."
+echo "{\"${MODULE}\": \"${VERSION}\"}" > "$SOURCE_DIR/$MODULE/version_info.json"
+
+# Verify version file was created
+if [[ ! -f "$SOURCE_DIR/$MODULE/version_info.json" ]]; then
+  echo "❌ ERROR: Failed to create version_info.json"
+  exit 1
+fi
+
 # Create tarball with standard exclusions
 echo ""
 echo "Creating tarball..."
@@ -88,16 +99,7 @@ if [[ ! -f "$OUTPUT_DIR/IQGeo_${MODULE}_${VERSION}.tar.gz" ]]; then
   exit 1
 fi
 
-# Generate version_info.json
-echo ""
-echo "Generating version_info.json..."
-echo "{\"${MODULE}\": \"${VERSION}\"}" > "$OUTPUT_DIR/version_info.json"
 
-# Verify version file was created
-if [[ ! -f "$OUTPUT_DIR/version_info.json" ]]; then
-  echo "❌ ERROR: Failed to create version_info.json"
-  exit 1
-fi
 
 # Display results
 echo ""
