@@ -321,25 +321,27 @@ jobs:
       build_id: ${{ inputs.build_id || github.run_id }}
       download_binaries: false
     secrets: inherit
-  
-  build-qa-appserver:
-    if: ${{ inputs.build_qa_images == true }}
-    needs: build-platform-components
-    uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
-    with:
-      version: ${{ inputs.version }}
-      module: platform-${{ inputs.module_prefix }}-qa-appserver
-      dockerfile_path: "dockerfiles/Dockerfile.QAappserver"
-      docker_context: "."
-      acr: "iqgeoproddev.azurecr.io"
-      harbor: "harbor.delivery.iqgeo.cloud"
-      engineering_prefix: ${{ inputs.engineering_prefix }}
-      releases_prefix: ${{ inputs.releases_prefix }}
-      is_release: ${{ inputs.is_release }}
-      updated_tags: ${{ inputs.tags || inputs.version }}
-      build_id: ${{ inputs.build_id || github.run_id }}
-      download_binaries: false
-    secrets: inherit
+
+
+  # TEMPORARILY DISABLED FOR TESTING
+  # build-qa-appserver:
+  #   if: ${{ inputs.build_qa_images == true }}
+  #   needs: build-platform-components
+  #   uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
+  #   with:
+  #     version: ${{ inputs.version }}
+  #     module: platform-${{ inputs.module_prefix }}-qa-appserver
+  #     dockerfile_path: "dockerfiles/Dockerfile.QAappserver"
+  #     docker_context: "."
+  #     acr: "iqgeoproddev.azurecr.io"
+  #     harbor: "harbor.delivery.iqgeo.cloud"
+  #     engineering_prefix: ${{ inputs.engineering_prefix }}
+  #     releases_prefix: ${{ inputs.releases_prefix }}
+  #     is_release: ${{ inputs.is_release }}
+  #     updated_tags: ${{ inputs.tags || inputs.version }}
+  #     build_id: ${{ inputs.build_id || github.run_id }}
+  #     download_binaries: false
+  #   secrets: inherit
 
   # TEMPORARILY DISABLED FOR TESTING
   # redeploy-eks-pod:
