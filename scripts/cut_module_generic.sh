@@ -46,13 +46,14 @@ echo "Source:     $SOURCE_DIR/$MODULE"
 echo "Output:     $OUTPUT_DIR"
 echo "========================================"
 
-# Change to module directory
-cd "$SOURCE_DIR/$MODULE"
+# Change to source directory (parent of module) so the tarball preserves
+# the module name as its top-level directory
+cd "$SOURCE_DIR"
 
 # Display module contents
 echo ""
 echo "Module contents:"
-ls -lah
+ls -lah "$MODULE"
 
 # Generate version_info.json
 echo ""
@@ -91,7 +92,7 @@ tar czf "$OUTPUT_DIR/IQGeo_${MODULE}_${VERSION}.tar.gz" \
   --exclude='htmlcov' \
   --exclude='dist' \
   --exclude='build' \
-  .
+  "$MODULE"
 
 # Verify tarball was created
 if [[ ! -f "$OUTPUT_DIR/IQGeo_${MODULE}_${VERSION}.tar.gz" ]]; then
