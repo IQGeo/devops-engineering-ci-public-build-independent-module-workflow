@@ -142,9 +142,9 @@ Examples:
 |-------|----------|-------------|---------|
 | `version` | Yes | Module version (e.g., 1.0.0) | - |
 | `module` | Yes | Module name (e.g., cyclomedia_integration) | - |
-| `module_prefix` | Yes | Short prefix for tags/paths (e.g., cyclomedia) | - |
 | `is_release` | Yes | "true" for release, "false" for pre-release | - |
 | `engineering_prefix` | No | ACR/Harbor path prefix | devops_sandbox_engineering |
+| `image_reference` | No | optional ACR/Harbor path folder | - |
 | `releases_prefix` | No | Releases path prefix | devops_sandbox_releases |
 | `custom_cut_script` | No | Path to custom cut script | "" (use generic) |
 | `build_qa_images` | No | Build full platform+module images | false |
@@ -259,36 +259,36 @@ build-independent-module-workflow/
 The workflow produces the following Docker images:
 
 ### Injector Image (Always Built)
-- **Path:** `{engineering_prefix}/{module_prefix}/{module}:{version}`
-- **Example:** `engineering/cyclomedia/cyclomedia_integration:1.0.0`
+- **Path:** `{engineering_prefix}/{module || image_reference}/{module}:{version}`
+- **Example:** `engineering/gwi/cyclomedia_integration:1.0.0`
 - **Contents:** Module source code only
 - **Used by:** Build images, deployment processes
 - **Built by:** `build-injector` job
 
 ### Platform Build Image (When build_qa_images=true)
-- **Path:** `{engineering_prefix}/platform-{module_prefix}-build:{version}`
-- **Example:** `engineering/platform-cyclomedia-build:1.0.0`
+- **Path:** `{engineering_prefix}/platform-{module}-build:{version}`
+- **Example:** `engineering/platform-cyclomedia-integration-build:1.0.0`
 - **Contents:** Platform + module with built bundles and dependencies
 - **Used by:** Creating appserver and tools images
 - **Built by:** `build-platform-build` job
 
 ### Platform Appserver Image (When build_qa_images=true)
-- **Path:** `{engineering_prefix}/platform-{module_prefix}-appserver:{version}`
-- **Example:** `engineering/platform-cyclomedia-appserver:1.0.0`
+- **Path:** `{engineering_prefix}/platform-{module}-appserver:{version}`
+- **Example:** `engineering/platform-cyclomedia-integration-appserver:1.0.0`
 - **Contents:** Production appserver with platform + module
 - **Used by:** Deployment, testing environments
 - **Built by:** `build-platform-components` job
 
 ### Platform Tools Image (When build_qa_images=true)
-- **Path:** `{engineering_prefix}/platform-{module_prefix}-tools:{version}`
-- **Example:** `engineering/platform-cyclomedia-tools:1.0.0`
+- **Path:** `{engineering_prefix}/platform-{module}-tools:{version}`
+- **Example:** `engineering/platform-cyclomedia-integration-tools:1.0.0`
 - **Contents:** Worker/tools image with platform + module
 - **Used by:** Background workers, scheduled tasks
 - **Built by:** `build-platform-components` job
 
 ### QA Appserver Image (When build_qa_images=true)
-- **Path:** `{engineering_prefix}/platform-{module_prefix}-qa-appserver:{version}`
-- **Example:** `engineering/platform-cyclomedia-qa-appserver:1.0.0`
+- **Path:** `{engineering_prefix}/platform-{module}-qa-appserver:{version}`
+- **Example:** `engineering/platform-cyclomedia-integration-qa-appserver:1.0.0`
 - **Contents:** QA-ready appserver (combined platform + module)
 - **Used by:** QA testing, automated test environments
 - **Built by:** `build-qa-appserver` job
@@ -319,8 +319,8 @@ The workflow executes the following jobs in sequence:
 
 ### 4. build-platform-components (Conditional)
 - Matrix job building two images:
-  - `platform-{module_prefix}-appserver`
-  - `platform-{module_prefix}-tools`
+  - `platform-{module}-appserver`
+  - `platform-{module}-tools`
 - Uses platform-build image as base
 - **Runs when:** `build_qa_images=true`
 - **Depends on:** `build-platform-build`

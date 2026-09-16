@@ -11,10 +11,6 @@ on:
         description: 'Module name (e.g., cyclomedia_integration)'
         required: true
         type: string
-      module_prefix:
-        description: 'Module prefix for tags and image paths (e.g., cyclomedia)'
-        required: true
-        type: string
       is_release:
         description: 'Whether this is a release (true) or pre-release (false)'
         required: true
@@ -23,6 +19,10 @@ on:
         description: 'Engineering prefix for ACR & Harbor image paths'
         type: string
         default: devops_sandbox_engineering
+      image_reference:
+        description: 'Optional input in the engineering_prefix for modules that are pushed to a different repository'
+        type: string
+        required: false        
       releases_prefix:
         description: 'Releases prefix for ACR & Harbor image paths'
         type: string
@@ -119,7 +119,7 @@ jobs:
       - name: Display environment
         run: |
           echo "Building ${{ inputs.module }} version ${{ inputs.version }}"
-          echo "Module prefix: ${{ inputs.module_prefix }}"
+          echo "Module: ${{ inputs.module }}"
           echo "Is release: ${{ inputs.is_release }}"
           echo "Platform version: ${{ inputs.platform_version }}"
           echo "Core repo: $CORE_REPO"
@@ -254,7 +254,7 @@ jobs:
       docker_context: "."
       acr: "iqgeoproddev.azurecr.io"
       harbor: "harbor.delivery.iqgeo.cloud"
-      engineering_prefix: ${{ inputs.engineering_prefix }}/${{ inputs.module_prefix }}
+      engineering_prefix: ${{ inputs.engineering_prefix }}/${{ inputs.image_reference ||  inputs.module  }}
       releases_prefix: ${{ inputs.releases_prefix }}
       is_release: ${{ inputs.is_release }}
       updated_tags: ${{ inputs.tags || inputs.version }}
@@ -269,8 +269,8 @@ jobs:
     uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
     with:
       version: ${{ inputs.version }}
-      module: platform-${{ inputs.module_prefix }}-build
-      dockerfile_path: "deployment/${{ inputs.module_prefix }}/dockerfile.build"
+      module: platform-${{ inputs.module }}-build
+      dockerfile_path: "deployment/${{ inputs.module }}/dockerfile.build"
       docker_context: "."
       acr: "iqgeoproddev.azurecr.io"
       harbor: "harbor.delivery.iqgeo.cloud"
@@ -288,16 +288,16 @@ jobs:
     strategy:
       matrix:
         include:
-          - module: platform-${{ inputs.module_prefix }}-appserver
-            dockerfile_path: deployment/${{ inputs.module_prefix }}/dockerfile.appserver
-          - module: platform-${{ inputs.module_prefix }}-tools
-            dockerfile_path: deployment/${{ inputs.module_prefix }}/dockerfile.tools
+          - module: platform-${{ inputs.module }}-appserver
+            dockerfile_path: deployment/${{ inputs.module }}/dockerfile.appserver
+          - module: platform-${{ inputs.module }}-tools
+            dockerfile_path: deployment/${{ inputs.module }}/dockerfile.tools
     uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
     with:
       version: ${{ inputs.version }}
       module: ${{ matrix.module }}
       dockerfile_path: ${{ matrix.dockerfile_path }}
-      docker_context: "./deployment/${{ inputs.module_prefix }}"
+      docker_context: "./deployment/${{ inputs.module }}"
       acr: "iqgeoproddev.azurecr.io"
       harbor: "harbor.delivery.iqgeo.cloud"
       engineering_prefix: ${{ inputs.engineering_prefix }}
@@ -316,7 +316,7 @@ jobs:
   #   uses: IQGeo/devops-engineering-ci-public-build-multi-arch-workflow/.github/workflows/build-multi-arch.yml@main
   #   with:
   #     version: ${{ inputs.version }}
-  #     module: platform-${{ inputs.module_prefix }}-qa-appserver
+  #     module: platform-${{ inputs.module }}-qa-appserver
   #     dockerfile_path: "dockerfiles/Dockerfile.QAappserver"
   #     docker_context: "."
   #     acr: "iqgeoproddev.azurecr.io"
