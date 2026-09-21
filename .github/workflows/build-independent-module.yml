@@ -11,6 +11,10 @@ on:
         description: 'Module name (e.g., cyclomedia_integration)'
         required: true
         type: string
+      release_modules:
+        description: 'Module name (e.g., cyclomedia_integration) that are released'
+        required: true
+        type: string        
       is_release:
         description: 'Whether this is a release (true) or pre-release (false)'
         required: true
@@ -250,6 +254,7 @@ jobs:
     with:
       version: ${{ inputs.version }}
       module: ${{ inputs.module }}
+      release_modules: ${{ inputs.release_modules }}
       dockerfile_path: "Dockerfile.injector"
       docker_context: "."
       acr: "iqgeoproddev.azurecr.io"
